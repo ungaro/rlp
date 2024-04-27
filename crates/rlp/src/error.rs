@@ -22,6 +22,8 @@ pub enum Error {
     UnexpectedString,
     /// Expected another type, got a list instead.
     UnexpectedList,
+    /// No Variant in ENUM
+    NoVariant,
     /// Got an unexpected number of items in a list.
     ListLengthMismatch {
         /// Expected length.
@@ -44,6 +46,7 @@ impl fmt::Display for Error {
             Self::InputTooShort => f.write_str("input too short"),
             Self::NonCanonicalSingleByte => f.write_str("non-canonical single byte"),
             Self::NonCanonicalSize => f.write_str("non-canonical size"),
+            Self::NoVariant => f.write_str("no variant in enum"),
             Self::UnexpectedLength => f.write_str("unexpected length"),
             Self::UnexpectedString => f.write_str("unexpected string"),
             Self::UnexpectedList => f.write_str("unexpected list"),

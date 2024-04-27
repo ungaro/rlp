@@ -51,7 +51,7 @@ pub fn max_encoded_len(input: TokenStream) -> TokenStream {
 ///
 /// This is the inverse of `RlpEncodable`.
 #[proc_macro_derive(RlpDecodable, attributes(rlp))]
-pub fn decodable(input: TokenStream) -> TokenStream {
+pub fn rlp_decodable(input: TokenStream) -> TokenStream {
     syn::parse(input)
         .and_then(|ast| impl_decodable(&ast))
         .unwrap_or_else(|err| err.to_compile_error())
