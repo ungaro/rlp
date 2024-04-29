@@ -1,4 +1,4 @@
-use alloy_rlp::{encode, encode_list, RlpDecodable, RlpEncodable, Error, Header};
+use alloy_rlp::{rlp_encode, encode_list, RlpDecodable, RlpEncodable, Error, Header};
 use bytes::BufMut;
 
 #[derive(Debug, PartialEq)]
@@ -37,11 +37,11 @@ impl RlpDecodable for FooBar {
 
 fn main() {
     let val = FooBar::Foo(42);
-    let out = encode(&val);
+    let out = rlp_encode(&val);
     assert_eq!(FooBar::rlp_decode(&mut out.as_ref()), Ok(val));
 
     let val = FooBar::Bar(7, 42);
-    let out = encode(&val);
+    let out = rlp_encode(&val);
     assert_eq!(FooBar::rlp_decode(&mut out.as_ref()), Ok(val));
 
     println!("success!")

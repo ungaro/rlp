@@ -1,8 +1,11 @@
 
 use crate::{Error, Header, Result};
 use bytes::{Bytes, BytesMut};
+use bytes::{Buf, BufMut};
+use  std::default::Default;
 use core::{borrow::BorrowMut, marker::{PhantomData, PhantomPinned}};
-//use encodable::Encodable;
+use crate::{ EMPTY_LIST_CODE, EMPTY_STRING_CODE};
+use core::hint::unreachable_unchecked;
 
 /// A type that can be decoded from an Decoder blob.
 pub trait RlpDecodable: Sized {
@@ -15,15 +18,19 @@ pub trait RlpDecodable: Sized {
 }
 
 /// An active Decoder decoder, with a specific slice of a payload.
+#[derive(Default)]
 pub struct Decoder<'a> {
     payload_view: &'a [u8],
+    /// True if list, false otherwise.
+    header: Option<Header>
+
 }
 
 impl<'a> Decoder<'a> {
     /// Instantiate an RLP decoder with a payload slice.
     pub fn new(mut payload: &'a [u8]) -> Result<Self> {
         let payload_view = Header::decode_bytes(&mut payload, true)?;
-        Ok(Self { payload_view })
+        Ok(Self { payload_view, header: None })
     }
 
     /// Decode the next item from the buffer.
@@ -40,7 +47,155 @@ impl<'a> Decoder<'a> {
 
 
 
+    /// Decodes an RLP header from the given buffer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the buffer is too short or the header is invalid.
+    #[inline]
+    pub fn decode(buf: &mut &[u8]) -> Result<Self> {
+        let payload_length;
+        let mut list = false;
+        match get_next_byte(buf)? {
+            0..=0x7F => payload_length = 1,
+
+            b @ EMPTY_STRING_CODE..=0xB7 => {
+                buf.advance(1);
+                payload_length = (b - EMPTY_STRING_CODE) as usize;
+                if payload_length == 1 && get_next_byte(buf)? < EMPTY_STRING_CODE {
+                    return Err(Error::NonCanonicalSingleByte);
+                }
+            }
+
+            b @ (0xB8..=0xBF | 0xF8..=0xFF) => {
+                buf.advance(1);
+
+                list = b >= 0xF8; // second range
+                let code = if list { 0xF7 } else { 0xB7 };
+
+                // SAFETY: `b - code` is always in the range `1..=8` in the current match arm.
+                // The compiler/LLVM apparently cannot prove this because of the `|` pattern +
+                // the above `if`, since it can do it in the other arms with only 1 range.
+                let len_of_len = unsafe { b.checked_sub(code).unwrap_unchecked() } as usize;
+                if len_of_len == 0 || len_of_len > 8 {
+                    unsafe { unreachable_unchecked() }
+                }
+
+                if buf.len() < len_of_len {
+                    return Err(Error::InputTooShort);
+                }
+                // SAFETY: length checked above
+                let len = unsafe { buf.get_unchecked(..len_of_len) };
+                buf.advance(len_of_len);
+
+                let len = u64::from_be_bytes(static_left_pad(len)?);
+                payload_length =
+                    usize::try_from(len).map_err(|_| Error::Custom("Input too big"))?;
+                if payload_length < 56 {
+                    return Err(Error::NonCanonicalSize);
+                }
+            }
+
+            b @ EMPTY_LIST_CODE..=0xF7 => {
+                buf.advance(1);
+                list = true;
+                payload_length = (b - EMPTY_LIST_CODE) as usize;
+            }
+        }
+
+        if buf.remaining() < payload_length {
+            return Err(Error::InputTooShort);
+        }
+
+        Ok(Self { list, payload_length })
+    }
+
+
+
+
+    /// Decodes the next payload from the given buffer, advancing it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the buffer is too short or the header is invalid.
+    #[inline]
+    pub fn decode_bytes<'b>(buf: &mut &'b [u8], is_list: bool) -> Result<&'b [u8]> {
+        //let Self { header: Option<Header<list, payload_length>> } = Self::decode(buf)?;
+        let Self { header: Option<header: Header{list, payload_length}> } = Self::decode(buf)?;
+        
+        if list != is_list {
+            return Err(if is_list { Error::UnexpectedString } else { Error::UnexpectedList });
+        }
+
+        // SAFETY: this is already checked in `decode`
+        if buf.remaining() < payload_length {
+            unsafe { unreachable_unchecked() }
+        }
+        let bytes = unsafe { buf.get_unchecked(..payload_length) };
+        buf.advance(payload_length);
+        Ok(bytes)
+    }
+
+
+    /// Decodes the next payload from the given buffer, advancing it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the buffer is too short or the header is invalid.
+    #[inline]
+    pub fn decode_raw<'a>(buf: &mut &'a [u8]) -> Result<&'a [u8]> {
+        //let Self { list, payload_length } = Self::decode(buf)?;
+
+       
+        // SAFETY: this is already checked in `decode`
+        if buf.remaining() < payload_length {
+            unsafe { unreachable_unchecked() }
+        }
+        let bytes = unsafe { buf.get_unchecked(..payload_length) };
+        buf.advance(payload_length);
+        Ok(bytes)
+    }
+
+
+
+    /// Decodes a string slice from the given buffer, advancing it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the buffer is too short or the header is invalid.
+    #[inline]
+    pub fn decode_str<'a>(buf: &mut &'a [u8]) -> Result<&'a str> {
+        let bytes = Self::decode_bytes(buf, false)?;
+        core::str::from_utf8(bytes).map_err(|_| Error::Custom("invalid string"))
+    }
+
+    /// Encodes the header into the `out` buffer.
+    #[inline]
+    pub fn encode(&self, out: &mut dyn BufMut) {
+        if self.payload_length < 56 {
+            let code = if self.list { EMPTY_LIST_CODE } else { EMPTY_STRING_CODE };
+            out.put_u8(code + self.payload_length as u8);
+        } else {
+            let len_be;
+            let len_be = crate::encode::to_be_bytes_trimmed!(len_be, self.payload_length);
+            let code = if self.list { 0xF7 } else { 0xB7 };
+            out.put_u8(code + len_be.len() as u8);
+            out.put_slice(len_be);
+        }
+    }
+
+    /// Returns the length of the encoded header.
+    #[inline]
+    pub const fn length(&self) -> usize {
+        crate::length_of_length(self.payload_length)
+    }
+
+
+
+
 }
+
+
 
 impl<T: ?Sized> RlpDecodable for PhantomData<T> {
     fn rlp_decode(_buf: &mut &[u8]) -> Result<Self> {
@@ -220,6 +375,16 @@ fn slice_to_array<const N: usize>(slice: &[u8]) -> Result<[u8; N]> {
     slice.try_into().map_err(|_| Error::UnexpectedLength)
 }
 
+
+#[inline(always)]
+fn get_next_byte(buf: &[u8]) -> Result<u8> {
+    if buf.is_empty() {
+        return Err(Error::InputTooShort);
+    }
+    // SAFETY: length checked above
+    Ok(*unsafe { buf.get_unchecked(0) })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,7 +405,7 @@ mod tests {
     {
         for (expected, mut input) in fixtures {
             if let Ok(expected) = &expected {
-                assert_eq!(crate::encode(expected), input, "{expected:?}");
+                assert_eq!(crate::rlp_encode(expected), input, "{expected:?}");
             }
 
             let orig = input;
@@ -250,7 +415,7 @@ mod tests {
                 "input: {}{}",
                 hex::encode(orig),
                 if let Ok(expected) = &expected {
-                    format!("; expected: {}", hex::encode(crate::encode(expected)))
+                    format!("; expected: {}", hex::encode(crate::rlp_encode(expected)))
                 } else {
                     String::new()
                 }

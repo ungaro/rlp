@@ -28,7 +28,7 @@ mod encode;
 #[cfg(feature = "arrayvec")]
 pub use encode::encode_fixed_size;
 pub use encode::{
-    encode, encode_iter, encode_list, length_of_length, list_length, RlpEncodable, MaxEncodedLen,
+    rlp_encode, encode_iter, encode_list, length_of_length, list_length, RlpEncodable, MaxEncodedLen,
     MaxEncodedLenAssoc,
 };
 
