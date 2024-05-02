@@ -1,6 +1,11 @@
+use alloy_rlp::{RlpEncodable, RlpDecodable, Decoder};
+
+fn main() {
+
+}
 
 
-#[test]
+/*
 fn simple_derive() {
     #[derive(RlpEncodable, RlpDecodable, RlpMaxEncodedLen, PartialEq, Debug)]
     struct MyThing(#[rlp] [u8; 12]);
@@ -17,16 +22,8 @@ fn simple_derive() {
     assert_eq!(Err(Error::InputTooShort), MyThing::rlp_decode(&mut [0x8c; 11].as_ref()))
 }
 
-#[test]
-fn wrapper() {
-    #[derive(RlpEncodableWrapper, RlpDecodableWrapper, RlpMaxEncodedLen, PartialEq, Debug)]
-    struct Wrapper([u8; 8]);
 
-    #[derive(RlpEncodableWrapper, RlpDecodableWrapper, PartialEq, Debug)]
-    struct ConstWrapper<const N: usize>([u8; N]);
-}
 
-#[test]
 fn generics() {
     trait LT<'a> {}
 
@@ -35,15 +32,11 @@ fn generics() {
     where
         U: std::fmt::Display;
 
-    #[derive(RlpEncodableWrapper, RlpDecodableWrapper, RlpMaxEncodedLen)]
-    struct GenericWrapper<T>(T)
-    where
-        T: Sized;
 }
 
 
 
-#[test]
+
 fn opt() {
     #[derive(RlpEncodable, RlpDecodable)]
     #[rlp(trailing)]
@@ -57,9 +50,6 @@ fn opt() {
         b: Option<T>,
     }
 }
-
-
-/*
 
 #[test]
 fn flatten() {

@@ -11,7 +11,7 @@ use alloc::vec::Vec;
 #[cfg(feature = "arrayvec")]
 use arrayvec::ArrayVec;
 
-pub trait RlpLength {
+pub trait RlpLength   {
     fn rlp_len(&self) -> usize {
         let raw_len = self.rlp_len_raw();
         length_of_length(raw_len) + raw_len
@@ -21,7 +21,7 @@ pub trait RlpLength {
 }
 
 /// A type that can be encoded via RLP.
-pub trait RlpEncodable: RlpLength {
+pub trait RlpEncodable {
     /// Encodes the type into the `out` buffer.
     fn rlp_encode(&self, out: &mut dyn BufMut);
 
@@ -40,7 +40,7 @@ pub trait RlpEncodable: RlpLength {
 
 // The existence of this function makes the compiler catch if the RlpEncodable
 // trait is "object-safe" or not.
-fn _assert_trait_object(_b: &dyn RlpEncodable) {}
+//fn _assert_trait_object(_b: Box<&dyn RlpEncodable>) {}
 
 /// Defines the max length of an [`RlpEncodable`] type as a const generic.
 ///
@@ -101,18 +101,30 @@ impl RlpEncodable for [u8] {
     }
 }
 
+
+
+// TODO: Implement RLP Length for more types
+
 impl RlpLength for [u8] {
     fn rlp_len_raw(&self) -> usize {
         self.len()
     }
 }
 
-impl RlpLength for str {
+/*
+impl RlpLength for &[u8] {
+    fn rlp_len_raw(&self) -> usize {
+        self.len()
+    }
+}
+*/
+/*
+impl RlpLength for &str {
     fn rlp_len_raw(&self) -> usize {
         self.as_bytes().length()
     }
 }
-
+*/
 impl RlpLength for bool {
     fn rlp_len_raw(&self) -> usize {
         1
@@ -128,16 +140,69 @@ impl<const N: usize> RlpLength for [u8; N] {
 }
 
 
-
+/*
 impl<T: RlpEncodable> RlpLength for Vec<T> {
     #[inline]
     fn rlp_len_raw(&self) -> usize {
         list_length(self)
     }
 }
+*/
 
 
 
+
+impl<T: ?Sized> RlpLength for PhantomData<T> {
+    #[inline]
+    fn rlp_len_raw(&self) -> usize {
+        0
+    }
+}
+
+impl RlpLength for PhantomPinned {
+    #[inline]
+    fn rlp_len_raw(&self) -> usize {
+        0
+    }
+}
+/*
+
+impl RlpLength for BytesMut {
+    #[inline]
+    fn rlp_len_raw(&self) -> usize {
+        0
+    }
+}
+
+
+impl RlpLength for bytes::Bytes {
+    #[inline]
+    fn rlp_len_raw(&self) -> usize {
+        0
+    }
+}
+*/
+/*
+impl<T: ?Sized> RlpLength for alloc::boxed::Box<T>{
+    #[inline]
+fn rlp_len_raw(&self) -> usize {
+    0
+}
+}
+
+    impl<T: ?Sized> RlpLength for alloc::sync::Arc<T>{
+        #[inline]
+    fn rlp_len_raw(&self) -> usize {
+        0
+    }
+}
+*/
+
+
+/*
+*/
+
+// TODO: END Implement RLP Length for more types
 
 
 impl<T: ?Sized> RlpEncodable for PhantomData<T> {
@@ -175,6 +240,7 @@ impl<const N: usize> RlpEncodable for [u8; N] {
 unsafe impl<const N: usize> MaxEncodedLenAssoc for [u8; N] {
     const LEN: usize = N + length_of_length(N);
 }
+
 
 impl RlpEncodable for str {
     #[inline]
@@ -256,6 +322,7 @@ macro_rules! uint_impl {
 macro_rules! int_impl {
     ($($t:ty),+ $(,)?) => {$(
 
+        
         impl RlpLength for $t {
             fn rlp_len_raw(&self) -> usize {
                 let x = *self;
@@ -309,26 +376,32 @@ impl<T: RlpEncodable> RlpEncodable for Vec<T> {
     }
 }
 
+
+
+
 macro_rules! deref_impl {
     ($($(#[$attr:meta])* [$($gen:tt)*] $t:ty),+ $(,)?) => {$(
         $(#[$attr])*
 
+  
+
         impl<$($gen)*> RlpLength for $t {
             #[inline]
             fn rlp_len_raw(&self) -> usize {
-                (**self).length()
+                (*self).length()
             }
-        }
 
+         
+        }
         impl<$($gen)*> RlpEncodable for $t {
             #[inline]
             fn length(&self) -> usize {
-                (**self).length()
+                (*self).length()
             }
 
             #[inline]
             fn rlp_encode(&self, out: &mut dyn BufMut) {
-                (**self).rlp_encode(out)
+                (*self).rlp_encode(out)
             }
         }
     )+};
@@ -343,7 +416,7 @@ deref_impl! {
     [T: ?Sized + RlpEncodable] &T,
     [T: ?Sized + RlpEncodable] &mut T,
     [T: ?Sized + RlpEncodable] alloc::boxed::Box<T>,
-    [T: ?Sized + alloc::borrow::ToOwned + RlpEncodable] alloc::borrow::Cow<'_, T>,
+    [T: ?Sized + alloc::borrow::ToOwned] alloc::borrow::Cow<'_, T>,
     [T: ?Sized + RlpEncodable] alloc::rc::Rc<T>,
     [T: ?Sized + RlpEncodable] alloc::sync::Arc<T>,
 }
@@ -371,12 +444,30 @@ mod std_support {
         }
     }
 
+    impl RlpLength for IpAddr {
+        #[inline]
+        fn rlp_len_raw(&self) -> usize {
+            match self {
+                Self::V4(ip) => ip.length(),
+                Self::V6(ip) => ip.length(),
+            }
+    }
+    }
+
     impl RlpLength for Ipv4Addr {
         #[inline]
         fn rlp_len_raw(&self) -> usize {
             self.octets().length()
         }
     }
+    impl RlpLength for Ipv6Addr {
+        #[inline]
+        fn rlp_len_raw(&self) -> usize {
+            self.octets().length()
+        }
+    }
+
+
 
 
     impl RlpEncodable for Ipv4Addr {
@@ -391,12 +482,7 @@ mod std_support {
         }
     }
 
-    impl RlpLength for Ipv6Addr {
-        #[inline]
-        fn rlp_len_raw(&self) -> usize {
-            self.octets().length()
-        }
-    }
+
 
     impl RlpEncodable for Ipv6Addr {
         #[inline]

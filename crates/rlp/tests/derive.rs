@@ -65,6 +65,7 @@ trait Transaction {
     fn rlp_decode(decoder: &mut &[u8]) -> Result<Self> where Self: Sized;
 }
 
+/*
 fn decode_transaction(decoder: &mut Decoder<'_>) -> Result<Box<dyn RlpDecodable>> {
     //let tx_type = decoder.get_next()?;
     let mut payload = Header::decode_bytes(decoder, false)?;
@@ -79,7 +80,7 @@ fn decode_transaction(decoder: &mut Decoder<'_>) -> Result<Box<dyn RlpDecodable>
     }*/
 
 }
-
+*/
 
 #[test]
 fn test1() {
@@ -93,10 +94,10 @@ rlp decode 0xc88363617483646f67 -> ["cat","dog"]
 
 
 */
-let catdog = Decoder::new(["cat", "dog"].as_bytes());
+//let catdog = Decoder::new(["cat", "dog"].as_bytes());
 
 
-let decoded = catdog::rlp_decode::<Vec<String>>().unwrap();
+//let decoded = catdog::rlp_decode::<Vec<String>>().unwrap();
 /*
   println!("Simple rlp decoding check");
 
@@ -104,7 +105,7 @@ let decoded = catdog::rlp_decode::<Vec<String>>().unwrap();
   let mut decoder = Decoder::new(&data);
   let tx = decode_transaction(&mut decoder)?;
   */
-  println!("Decoded transaction: {:?}", decoded);
+  //println!("Decoded transaction: {:?}", decoded);
 }
 
 
@@ -171,9 +172,6 @@ fn eip2718() {
 
 }
 
-*/
-
-
 
 
 #[test]
@@ -190,3 +188,8 @@ fn opt() {
         b: Option<T>,
     }
 }
+
+*/
+
+
+

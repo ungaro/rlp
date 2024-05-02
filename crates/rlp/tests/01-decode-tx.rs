@@ -7,7 +7,7 @@ fn main() {
     let mut decoder = Decoder::new(rlp);
     
     //let options = Options::<String>::rlp_decode(&mut decoder).unwrap();
-    //println!("{:?}", options);
+    //println!("decoder {:?}", decoder);
 
 
 

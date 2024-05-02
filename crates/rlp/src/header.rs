@@ -2,6 +2,7 @@ use crate::{decode::static_left_pad, Error, Result, EMPTY_LIST_CODE, EMPTY_STRIN
 use bytes::{Buf, BufMut};
 use core::hint::unreachable_unchecked;
 
+
 /// The header of an RLP item.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Header {
@@ -41,6 +42,8 @@ impl Header {
                 // SAFETY: `b - code` is always in the range `1..=8` in the current match arm.
                 // The compiler/LLVM apparently cannot prove this because of the `|` pattern +
                 // the above `if`, since it can do it in the other arms with only 1 range.
+
+
                 let len_of_len = unsafe { b.checked_sub(code).unwrap_unchecked() } as usize;
                 if len_of_len == 0 || len_of_len > 8 {
                     unsafe { unreachable_unchecked() }
